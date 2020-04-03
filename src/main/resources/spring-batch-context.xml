@@ -1,0 +1,52 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+    xmlns:batch="http://www.springframework.org/schema/batch" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.springframework.org/schema/batch http://www.springframework.org/schema/batch/spring-batch-3.0.xsd
+        http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+	<import resource="classpath:context-datasource.xml"/>
+	
+	<bean id="jobRepository" class="org.springframework.batch.core.repository.support.MapJobRepositoryFactoryBean" />
+ 
+    <bean id="jobLauncher" class="org.springframework.batch.core.launch.support.SimpleJobLauncher">
+        <property name="jobRepository" ref="jobRepository" />
+    </bean>
+    
+    <bean id="databaseItemReader" class="org.springframework.batch.item.database.JdbcCursorItemReader">
+    	<property name="dataSource" ref="dataSource"/>
+    	<property name="sql" value="SELECT employee_name, check_in, check_out FROM employee"></property>
+    	<property name="rowMapper">
+    		<bean class="websystique.util.EmployeeMapper"></bean>
+    	</property>
+    </bean>
+	
+	<bean id="flatFileItemWriter" class="org.springframework.batch.item.file.FlatFileItemWriter" scope="step">
+		<property name="resource" value="file:output/SwipeReport.txt"></property>
+		<property name="lineAggregator">
+			<bean class="org.springframework.batch.item.file.transform.DelimitedLineAggregator">
+				<property name="delimiter" value="|"/>
+				<property name="fieldExtractor">
+					<bean class="org.springframework.batch.item.file.transform.BeanWrapperFieldExtractor">
+						<property name="names" value="employeeName, checkIn, checkOut"></property>
+					</bean>
+				</property>
+			</bean>
+		</property>
+	</bean>
+	
+	<bean id="jobListener" class="websystique.processor.EmployeeJobListener"/>
+	
+	<bean id="itemProcessor" class="websystique.processor.EmployeeItemProcessor"/>
+	
+	<bean id="transactionManager" class="org.springframework.batch.support.transaction.ResourcelessTransactionManager"/>
+	
+	<batch:job id="employeeJob">
+		<batch:step id="Step1">
+			<batch:tasklet transaction-manager="transactionManager">
+				<batch:chunk reader="databaseItemReader" writer="flatFileItemWriter" processor="itemProcessor" commit-interval="10"/>
+			</batch:tasklet>
+		</batch:step>
+		<batch:listeners>
+			<batch:listener ref="jobListener"></batch:listener>
+		</batch:listeners>
+	</batch:job>
+</beans>
